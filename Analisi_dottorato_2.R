@@ -32,22 +32,15 @@ data_4<-read_excel("./TabelloneOcrelizumab FINALE (conte e %) - 05Agosto24.xlsx"
 colnames(data_4) <- gsub(" ", "", colnames(data_4))
 names(data_4)
 data_4<-as.data.frame(data_4)
-data_4<-data.frame(lapply(data_4, function(x) {
-  # Tenta di convertire in numerico
-  as_numeric <- as.numeric(x)
-  # Se ci sono NA generati dalla conversione, mantieni la colonna originale
-  if (all(is.na(as_numeric)) && !all(is.na(x))) {
-    return(x)
-  } else {
-    return(as_numeric)
-  }
-}))
 
-str(data_4)
+
+data_4[, 6:184] = lapply(data_4[, 6:184], as.numeric)
 
 data_4$TP
 for(col in names(data_4[!is.na(data_4$TP),])[6:184]){
   print(col)
+  
+  data_4[,col]<-as.numeric(data_4[,col])
   test<-kruskal.test(data_4[,col]~data_4$Timepoint,data = data_4)
   
   
@@ -77,40 +70,20 @@ head(data_4[,1:5])
 data_1$Code<-paste0(data_1$`Codice pz`,"_",data_1$Timepoint)
 data_4$Code<-paste0(data_4$`Codicepz`,"_",data_4$Timepoint)
 merge1_4<-merge(data_1,data_4,by="Code")
-
+dim(merge1_4)
 X <- merge1_4$`NFL (pg/ml)`
 names(merge1_4)
 
-sing<-vector()
 
-
-
-
-
-
-for (col in names(merge1_4)[c(16:194)]){
-  
-  c<-cov(merge1_4$`NFL (pg/ml)`,
-         merge1_4[,col],use = "complete.obs")
-  cr<-cor.test(merge1_4$`NFL (pg/ml)`,
-               merge1_4[,col],use = "complete.obs")
-  
-  if (cr$p.value<0.05){
-    print(col)
-    sing<-c(sing,col)
-  }
-}
-
-str(merge1_4)
 #############################################
 # per ogni timepoint, scelgo confronto quelli con
 # alto o basso NFL rispetto al valore mediano di quel 
 # tp
-
-for (tm in unique(merge1_2$Timepoint)){
+merge1_4$Timepoint.x
+for (tm in unique(merge1_4$Timepoint.x)){
   
   
-  tem<-merge1_2[merge1_2$Timepoint==tm,]
+  tem<-merge1_4[merge1_4$Timepoint.x==tm,]
   
   mediana<-median(tem$`NFL (pg/ml)`,na.rm = T)
   
@@ -118,7 +91,7 @@ for (tm in unique(merge1_2$Timepoint)){
   tem$Group<-ifelse(tem$`NFL (pg/ml)`<=mediana,
                     "Low","High")
   
-  for (col in names(tem)[15:141] ){
+  for (col in names(tem)[16:141] ){
     
     if (!all(tem[,col]==0)& col!="DN2/MFICD71"&col!="DN2/MFICD31")
       test<-wilcox.test(tem[!is.na(tem$`NFL (pg/ml)`),col]~Group,data=
@@ -140,11 +113,11 @@ for (tm in unique(merge1_2$Timepoint)){
                                      aes(fill=Group))+
         ggprism::theme_prism(base_size = 15)+
         ylab(col)+xlab("")+ggtitle(paste0(tm," ",col))+
-        stat_compare_means()+
+        stat_compare_means(comparisons = list(c("Low",
+                                                "High")))+
         ggsci::scale_fill_aaas()
       print(p1)
-      
-      
+
     }
   }
   
@@ -154,24 +127,26 @@ for (tm in unique(merge1_2$Timepoint)){
 # Differenze in base alla difference
 # NFL tx - NFL t0
 
-merge1_2$Group_diff<-
-  ifelse(merge1_2$Difference<=0,"M",
+merge1_4$Group_diff<-
+  ifelse(merge1_4$Difference<=0,"M",
          "P")
 
-
-for (col in names(merge1_2)[15:141]){
+merge1_4$Group_ratio<-
+  ifelse(merge1_4$Ratio<=1,"M",
+         "P")
+for (col in names(merge1_4)[16:194]){
   test<-
-    wilcox.test(merge1_2[!is.na(merge1_2$`NFL (pg/ml)`)&
-                           !is.na(merge1_2$Group_diff),col]~
-                  Group_ratio,data=merge1_2[!is.na(merge1_2$`NFL (pg/ml)`)&
-                                              !is.na(merge1_2$Group_diff),])
+    wilcox.test(merge1_4[!is.na(merge1_4$`NFL (pg/ml)`)&
+                           !is.na(merge1_4$Group_diff),col]~
+                  Group_ratio,data=merge1_4[!is.na(merge1_4$`NFL (pg/ml)`)&
+                                              !is.na(merge1_4$Group_diff),])
   if (test$p.value<0.05){
     
-    pl<-ggplot(merge1_2[!is.na(merge1_2$`NFL (pg/ml)`)&
-                          !is.na(merge1_2$Group_diff),],
+    pl<-ggplot(merge1_4[!is.na(merge1_4$`NFL (pg/ml)`)&
+                          !is.na(merge1_4$Group_diff),],
                aes(
-                 y=merge1_2[!is.na(merge1_2$`NFL (pg/ml)`)&
-                              !is.na(merge1_2$Group_diff),col],
+                 y=merge1_4[!is.na(merge1_4$`NFL (pg/ml)`)&
+                              !is.na(merge1_4$Group_diff),col],
                  x=factor(Group_diff,
                           levels = c("M","P"))))+
       geom_boxplot(outliers = F)+
@@ -180,18 +155,18 @@ for (col in names(merge1_2)[15:141]){
                                    aes(fill=Group_diff))+
       ggprism::theme_prism(base_size = 15)+
       ylab(col)+
-      xlab("")+facet_wrap(~Timepoint,nrow = 1)+
+      xlab("")+facet_wrap(~Timepoint.x,nrow = 1)+
       stat_compare_means(comparisons = list(c("M","P")))+
       ggsci::scale_fill_aaas()
     
     print(pl)
     
     
-    pl2<-ggplot(merge1_2[!is.na(merge1_2$`NFL (pg/ml)`)&
-                           !is.na(merge1_2$Group_diff),],
+    pl2<-ggplot(merge1_4[!is.na(merge1_4$`NFL (pg/ml)`)&
+                           !is.na(merge1_4$Group_diff),],
                 aes(
-                  y=merge1_2[!is.na(merge1_2$`NFL (pg/ml)`)&
-                               !is.na(merge1_2$Group_diff),col],
+                  y=merge1_4[!is.na(merge1_4$`NFL (pg/ml)`)&
+                               !is.na(merge1_4$Group_diff),col],
                   x=factor(Group_diff,
                            levels = c("M","P"))))+
       geom_boxplot(outliers = F)+
@@ -214,24 +189,24 @@ for (col in names(merge1_2)[15:141]){
 # Differenze in base alla rati
 # NFL tx / NFL t0
 
-merge1_2$Group_ratio<-
-  ifelse(merge1_2$Ratio<=1,"M",
+merge1_4$Group_ratio<-
+  ifelse(merge1_4$Ratio<=1,"M",
          "P")
 
 
-for (col in names(merge1_2)[15:141]){
+for (col in names(merge1_4)[16:194]){
   
   test<-
-    wilcox.test(merge1_2[!is.na(merge1_2$`NFL (pg/ml)`)&
-                           !is.na(merge1_2$Group_ratio),col]~
-                  Group_ratio,data=merge1_2[!is.na(merge1_2$`NFL (pg/ml)`)&
-                                              !is.na(merge1_2$Group_ratio),])
+    wilcox.test(merge1_4[!is.na(merge1_4$`NFL (pg/ml)`)&
+                           !is.na(merge1_4$Group_ratio),col]~
+                  Group_ratio,data=merge1_4[!is.na(merge1_4$`NFL (pg/ml)`)&
+                                              !is.na(merge1_4$Group_ratio),])
   if (test$p.value<0.05){
-    pl<-ggplot(merge1_2[!is.na(merge1_2$`NFL (pg/ml)`)&
-                          !is.na(merge1_2$Group_ratio),],
+    pl<-ggplot(merge1_4[!is.na(merge1_4$`NFL (pg/ml)`)&
+                          !is.na(merge1_4$Group_ratio),],
                aes(
-                 y=merge1_2[!is.na(merge1_2$`NFL (pg/ml)`)&
-                              !is.na(merge1_2$Group_ratio),col],
+                 y=merge1_4[!is.na(merge1_4$`NFL (pg/ml)`)&
+                              !is.na(merge1_4$Group_ratio),col],
                  x=factor(Group_ratio,
                           levels = c("M","P"))))+
       geom_boxplot(outliers = F)+
@@ -240,18 +215,18 @@ for (col in names(merge1_2)[15:141]){
                                    aes(fill=Group_ratio))+
       ggprism::theme_prism(base_size = 15)+
       ylab(col)+
-      xlab("")+facet_wrap(~Timepoint,nrow = 1)+
+      xlab("")+facet_wrap(~Timepoint.x,nrow = 1)+
       stat_compare_means(comparisons = list(c("M","P")))+
       ggsci::scale_fill_aaas()
     
     print(pl)
     
     
-    pl2<-ggplot(merge1_2[!is.na(merge1_2$`NFL (pg/ml)`)&
-                           !is.na(merge1_2$Group_ratio),],
+    pl2<-ggplot(merge1_4[!is.na(merge1_4$`NFL (pg/ml)`)&
+                           !is.na(merge1_4$Group_ratio),],
                 aes(
-                  y=merge1_2[!is.na(merge1_2$`NFL (pg/ml)`)&
-                               !is.na(merge1_2$Group_ratio),col],
+                  y=merge1_4[!is.na(merge1_4$`NFL (pg/ml)`)&
+                               !is.na(merge1_4$Group_ratio),col],
                   x=factor(Group_ratio,
                            levels = c("M","P"))))+
       geom_boxplot(outliers = F)+
@@ -271,23 +246,23 @@ for (col in names(merge1_2)[15:141]){
 
 ###############################
 # correlazione con diff e valore
-for (col in names(merge1_2)[15:141]){
+for (col in names(merge1_4)[16:194]){
   
-  test<-cor.test(merge1_2[!is.na(merge1_2$`NFL (pg/ml)`)&
-                            !is.na(merge1_2$Group_diff)&
-                            merge1_2$Timepoint!="T0",col],
-                 merge1_2[!is.na(merge1_2$`NFL (pg/ml)`)&
-                            !is.na(merge1_2$Group_diff)&
-                            merge1_2$Timepoint!="T0","Difference"])
+  test<-cor.test(merge1_4[!is.na(merge1_4$`NFL (pg/ml)`)&
+                            !is.na(merge1_4$Group_diff)&
+                            merge1_4$Timepoint.x!="T0",col],
+                 merge1_4[!is.na(merge1_4$`NFL (pg/ml)`)&
+                            !is.na(merge1_4$Group_diff)&
+                            merge1_4$Timepoint.x!="T0","Difference"])
   
   if (test$p.value<0.05){
     
-    pp<-ggplot(merge1_2[!is.na(merge1_2$`NFL (pg/ml)`)&
-                          !is.na(merge1_2$Group_ratio)&
-                          merge1_2$Timepoint!="T0",],
-               aes(Difference,merge1_2[!is.na(merge1_2$`NFL (pg/ml)`)&
-                                         !is.na(merge1_2$Group_ratio)&
-                                         merge1_2$Timepoint!="T0",col]))+
+    pp<-ggplot(merge1_4[!is.na(merge1_4$`NFL (pg/ml)`)&
+                          !is.na(merge1_4$Group_ratio)&
+                          merge1_4$Timepoint.x!="T0",],
+               aes(Difference,merge1_4[!is.na(merge1_4$`NFL (pg/ml)`)&
+                                         !is.na(merge1_4$Group_ratio)&
+                                         merge1_4$Timepoint.x!="T0",col]))+
       geom_point(fill="darkred",
                  shape=21,size=3)+ylab(col)+
       geom_smooth(method = "lm",se=F)+
@@ -302,23 +277,23 @@ for (col in names(merge1_2)[15:141]){
 
 ##########################
 # correlazione con Ratio e valore
-for (col in names(merge1_2)[15:141]){
+for (col in names(merge1_4)[16:194]){
   
-  test<-cor.test(merge1_2[!is.na(merge1_2$`NFL (pg/ml)`)&
-                            !is.na(merge1_2$Group_ratio)&
-                            merge1_2$Timepoint!="T0",col],
-                 merge1_2[!is.na(merge1_2$`NFL (pg/ml)`)&
-                            !is.na(merge1_2$Group_ratio)&
-                            merge1_2$Timepoint!="T0","Ratio"])
+  test<-cor.test(merge1_4[!is.na(merge1_4$`NFL (pg/ml)`)&
+                            !is.na(merge1_4$Group_ratio)&
+                            merge1_4$Timepoint.x!="T0",col],
+                 merge1_4[!is.na(merge1_4$`NFL (pg/ml)`)&
+                            !is.na(merge1_4$Group_ratio)&
+                            merge1_4$Timepoint.x!="T0","Ratio"])
   
   if (test$p.value<0.05){
     
-    pp<-ggplot(merge1_2[!is.na(merge1_2$`NFL (pg/ml)`)&
-                          !is.na(merge1_2$Group_ratio)&
-                          merge1_2$Timepoint!="T0",],
-               aes(Ratio,merge1_2[!is.na(merge1_2$`NFL (pg/ml)`)&
-                                    !is.na(merge1_2$Group_ratio)&
-                                    merge1_2$Timepoint!="T0",col]))+
+    pp<-ggplot(merge1_4[!is.na(merge1_4$`NFL (pg/ml)`)&
+                          !is.na(merge1_4$Group_ratio)&
+                          merge1_4$Timepoint.x!="T0",],
+               aes(Ratio,merge1_4[!is.na(merge1_4$`NFL (pg/ml)`)&
+                                    !is.na(merge1_4$Group_ratio)&
+                                    merge1_4$Timepoint.x!="T0",col]))+
       geom_point(fill="darkblue",
                  shape=21,size=3)+ylab(col)+
       geom_smooth(method = "lm",se=F)+
@@ -335,40 +310,48 @@ for (col in names(merge1_2)[15:141]){
 ##############
 # Alluvial plot
 library(tidyverse)
+library(ggalluvial)
 
-names(merge1_2)
+names(merge1_4)
 
-for (name in c("CD19\\+",
-               "ASC/","SW/",
-               "cMem","DN/","DN1\\+DN3/","DN2/",
-               "Tr/","Naive/","USW/","USWmemory/",
-               "USWPB/","nonASC/")){
+for (name in c("CD3/CD4/Tconv/Naive/",
+               "CD3/CD4/Tconv/Nonnaive/",
+               "CD3/CD4/Tconv/Nonnaive/Th1-17/",
+               "CD3/CD4/Treg/Nonnaive/",
+               "CD3/CD4/Treg/Naive/",
+               "CD3/CD4-/MAIT",
+               "CD3/CD4-/NonMAIT/CD8/Naive/",
+               "CD3/CD4-/NonMAIT/CD8/Nonnaive/"
+               
+               )){
   
   print(name)
   
-  cols_to_pivot <- names(merge1_2)[grepl(name, names(merge1_2)) & !grepl("MFI", names(merge1_2))
-                                   & !grepl("non", names(merge1_2))
-                                   &!grepl("count", names(merge1_2))]
+  cols_to_pivot <- names(merge1_4)[grepl(name, names(merge1_4)) & !grepl("MFI", names(merge1_4))
+                                   & !grepl("non", names(merge1_4))
+                                   &!grepl("Median", names(merge1_4))
+                                   &!grepl("count", names(merge1_4))]
   
   if (name=="nonASC/"){
-    cols_to_pivot <- names(merge1_2)[grepl(name, names(merge1_2)) & !grepl("MFI", names(merge1_2))]
+    cols_to_pivot <- names(merge1_4)[grepl(name, names(merge1_4)) & !grepl("MFI", names(merge1_4))]
     
   }
-  df_long <- merge1_2 %>%
+  df_long <- merge1_4 %>%
     pivot_longer(cols = all_of(cols_to_pivot),
                  names_to = "Population",
                  values_to = "Value")
   
   df_medians <- df_long %>%
-    group_by(Timepoint, Population) %>%
+    group_by(Timepoint.x, Population) %>%
     summarize(MedianValue = median(Value, na.rm = TRUE))
   
   df_medians$Population<-str_replace(df_medians$Population,
                                      name,"")
-  
+  df_medians$Population<-str_replace(df_medians$Population,
+                                     "\\|Freq.ofParent","")
   df_medians[df_medians$MedianValue==0,]$MedianValue=0.0001
   allu<-ggplot(df_medians,
-               aes(x = Timepoint, stratum =Population,
+               aes(x = Timepoint.x, stratum =Population,
                    alluvium =Population,
                    y = MedianValue,
                    fill = Population, label = Population)) +
@@ -384,39 +367,46 @@ for (name in c("CD19\\+",
 
 ########################################
 
-for (name in c("CD19\\+",
-               "ASC/","SW/",
-               "cMem","DN/","DN1\\+DN3/","DN2/",
-               "Tr/","Naive/","USW/","USWmemory/",
-               "USWPB/","nonASC/")){
+for (name in c("CD3/CD4/Tconv/Naive/",
+               "CD3/CD4/Tconv/Nonnaive/",
+               "CD3/CD4/Tconv/Nonnaive/Th1-17/",
+               "CD3/CD4/Treg/Nonnaive/",
+               "CD3/CD4/Treg/Naive/",
+               "CD3/CD4-/MAIT/",
+               "CD3/CD4-/NonMAIT/CD8/Naive/",
+               "CD3/CD4-/NonMAIT/CD8/Nonnaive/"
+)){
   
   print(name)
   
-  cols_to_pivot <- names(merge1_2)[grepl(name, names(merge1_2)) & !grepl("MFI", names(merge1_2))
-                                   & !grepl("non", names(merge1_2))
-                                   &!grepl("count", names(merge1_2)) |
-                                     grepl("NFL", names(merge1_2))  
+  cols_to_pivot <- names(merge1_4)[grepl(name, names(merge1_4)) & !grepl("MFI", names(merge1_4))
+                                   & !grepl("non", names(merge1_4))
+                                   &!grepl("count", names(merge1_4)) &!grepl("Median", names(merge1_4))
+                                   |
+                                     grepl("NFL", names(merge1_4))  
   ]
   
   if (name=="nonASC/"){
-    cols_to_pivot <- names(merge1_2)[ grepl("NFL", names(merge1_2)) | grepl(name, names(merge1_2)) & !grepl("MFI", names(merge1_2))]
+    cols_to_pivot <- names(merge1_4)[ grepl("NFL", names(merge1_4)) | grepl(name, names(merge1_4)) & !grepl("MFI", names(merge1_4))]
     
   }
-  df_long <- merge1_2 %>%
+  df_long <- merge1_4 %>%
     pivot_longer(cols = all_of(cols_to_pivot),
                  names_to = "Population",
                  values_to = "Value")
   
   df_medians <- df_long %>%
-    group_by(Timepoint, Population) %>%
+    group_by(Timepoint.x, Population) %>%
     summarize(MedianValue = median(Value, na.rm = TRUE))
   
   df_medians$Population<-str_replace(df_medians$Population,
                                      name,"")
+  df_medians$Population<-str_replace(df_medians$Population,
+                                     "\\|Freq.ofParent","")
   
   df_medians[df_medians$MedianValue==0,]$MedianValue=0.0001
   allu<-ggplot(df_medians,
-               aes(x = Timepoint, stratum =Population,
+               aes(x = Timepoint.x, stratum =Population,
                    alluvium =Population,
                    y = MedianValue,
                    fill = Population, label = Population)) +
@@ -439,25 +429,28 @@ min_max_scaling <- function(x) {
 
 # Applicazione su un dataframe
 
-for (name in c("CD19\\+/",
-               "ASC/","SW/",
-               "cMem","DN/","DN1\\+DN3/","DN2/",
-               "Tr/","Naive/","USW/","USWmemory/",
-               "USWPB/","nonASC/")){
+for (name in c("CD3/CD4/Tconv/Naive/",
+               "CD3/CD4/Tconv/Nonnaive/",
+               "CD3/CD4/Tconv/Nonnaive/Th1-17/",
+               "CD3/CD4/Treg/Nonnaive/",
+               "CD3/CD4/Treg/Naive/",
+               "CD3/CD4-/MAIT/",
+               "CD3/CD4-/NonMAIT/CD8/Naive/",
+               "CD3/CD4-/NonMAIT/CD8/Nonnaive/")){
   
   print(name)
   
-  cols_to_pivot <- names(merge1_2)[grepl(name, names(merge1_2)) & !grepl("MFI", names(merge1_2))
-                                   & !grepl("non", names(merge1_2))
-                                   &!grepl("count", names(merge1_2)) |
-                                     grepl("NFL", names(merge1_2))  
+  cols_to_pivot <- names(merge1_4)[grepl(name, names(merge1_4)) & !grepl("MFI", names(merge1_4))
+                                   & !grepl("non", names(merge1_4))&!grepl("Median", names(merge1_4))
+                                   &!grepl("count", names(merge1_4)) |
+                                     grepl("NFL", names(merge1_4))  
   ]
   
   if (name=="nonASC/"){
-    cols_to_pivot <- names(merge1_2)[ grepl("NFL", names(merge1_2)) | grepl(name, names(merge1_2)) & !grepl("MFI", names(merge1_2))]
+    cols_to_pivot <- names(merge1_4)[ grepl("NFL", names(merge1_4)) | grepl(name, names(merge1_4)) & !grepl("MFI", names(merge1_4))]
     
   }
-  df_normalized <-  merge1_2  %>%
+  df_normalized <-  merge1_4  %>%
     mutate(across(where(is.numeric), min_max_scaling))
   df_long <- df_normalized  %>%
     pivot_longer(cols = all_of(cols_to_pivot),
@@ -465,15 +458,17 @@ for (name in c("CD19\\+/",
                  values_to = "Value")
   
   df_medians <- df_long %>%
-    group_by(Timepoint, Population) %>%
+    group_by(Timepoint.x, Population) %>%
     summarize(MedianValue = median(Value, na.rm = TRUE))
   
   df_medians$Population<-str_replace(df_medians$Population,
                                      name,"")
+  df_medians$Population<-str_replace(df_medians$Population,
+                                     "\\|Freq.ofParent","")
   
   df_medians[df_medians$MedianValue==0&!is.na(df_medians$MedianValue),]$MedianValue=0.0001
   allu<-ggplot(df_medians,
-               aes(x = Timepoint, stratum =Population,
+               aes(x = Timepoint.x, stratum =Population,
                    alluvium =Population,
                    y = MedianValue,
                    fill = Population, label = Population)) +
@@ -486,15 +481,16 @@ for (name in c("CD19\\+/",
     ggtitle(name)
   print(allu)
   plt2<-ggplot()+
-    geom_line(data=df_medians[df_medians$Population!="NFL (pg/ml)",],aes(Timepoint,
+    geom_line(data=df_medians[df_medians$Population!="NFL (pg/ml)",],
+              aes(Timepoint.x,
                                                                          MedianValue,
                                                                          group=Population),color="grey")+
     
     geom_line(data=df_medians[df_medians$Population==
                                 "NFL (pg/ml)",],
-              aes(Timepoint,MedianValue,
+              aes(Timepoint.x,MedianValue,
                   group=Population),color="red")+
-    geom_point(df_medians,mapping=aes(Timepoint,
+    geom_point(df_medians,mapping=aes(Timepoint.x,
                                       MedianValue,
                                       fill=Population),shape=21,size=3)+
     ggprism::theme_prism(base_size = 15)
@@ -504,23 +500,23 @@ for (name in c("CD19\\+/",
 
 
 
-for (col in names(merge1_2)[15:141]){
-  df_normalized <-  merge1_2  %>%
+for (col in names(merge1_4)[16:194]){
+  df_normalized <-  merge1_4  %>%
     mutate(across(where(is.numeric), min_max_scaling))
   p<-ggplot(df_normalized)+
-    geom_line(aes(Timepoint, df_normalized[,col],group=`Codice pz`))+
-    geom_point(aes(Timepoint, df_normalized[,col],fill=`Codice pz`),shape=21)+
-    geom_line(aes(Timepoint, `NFL (pg/ml)`,group=`Codice pz`),color="grey")+
-    geom_point(aes(Timepoint, `NFL (pg/ml)`),shape=21,fill="darkred")+
+    geom_line(aes(Timepoint.x, df_normalized[,col],group=`Codice pz`))+
+    geom_point(aes(Timepoint.x, df_normalized[,col],fill=`Codice pz`),shape=21)+
+    geom_line(aes(Timepoint.x, `NFL (pg/ml)`,group=`Codice pz`),color="grey")+
+    geom_point(aes(Timepoint.x, `NFL (pg/ml)`),shape=21,fill="darkred")+
     facet_wrap(~`Codice pz`)+ylab(col)+
     ggprism::theme_prism()
   #print(p)
   
-  p2<-ggplot(merge1_2)+
-    geom_line(aes(Timepoint, merge1_2[,col],group=`Codice pz`))+
-    geom_point(aes(Timepoint, merge1_2[,col],fill=`Codice pz`),shape=21)+
-    geom_line(aes(Timepoint, `NFL (pg/ml)`,group=`Codice pz`),color="grey")+
-    geom_point(aes(Timepoint, `NFL (pg/ml)`),shape=21,fill="darkred")+
+  p2<-ggplot(merge1_4)+
+    geom_line(aes(Timepoint.x, merge1_4[,col],group=`Codice pz`))+
+    geom_point(aes(Timepoint.x, merge1_4[,col],fill=`Codice pz`),shape=21)+
+    geom_line(aes(Timepoint.x, `NFL (pg/ml)`,group=`Codice pz`),color="grey")+
+    geom_point(aes(Timepoint.x, `NFL (pg/ml)`),shape=21,fill="darkred")+
     facet_wrap(~`Codice pz`)+ylab(col)+
     ggprism::theme_prism()
   print(p2)
@@ -528,11 +524,11 @@ for (col in names(merge1_2)[15:141]){
 
 
 
-for (name in names(merge1_2)[15:141]){
-  df_long <- merge1_2 %>%
+for (name in names(merge1_4)[16:194]){
+  df_long <- merge1_4 %>%
     pivot_longer(cols = c(name, `NFL (pg/ml)`), names_to = "Marker", values_to = "Value")
   
-  p<-ggplot(df_long, aes(x = Timepoint, y = Value,
+  p<-ggplot(df_long, aes(x = Timepoint.x, y = Value,
                          
                          group = interaction(`Codice pz`, Marker))) +
     geom_line(aes(linetype = "Patient Line",color = Marker), size = 0.8,
@@ -542,7 +538,7 @@ for (name in names(merge1_2)[15:141]){
                 method = "loess", se = FALSE, 
                 size = 2) +  # Linee di tendenza
     scale_linetype_manual(values = c("Patient Line" = "solid", "Trend Line" = "dashed")) +  # Differenziazione del tipo di linea
-    labs(title = paste0("Andamento di ",name," e NFL nel Tempo per Paziente"),
+    labs(title = paste0(name," e NFL nel Tempo per Paziente"),
          x = "Timepoint",
          y = "Valore",
          color = "Marker") +
@@ -552,35 +548,34 @@ for (name in names(merge1_2)[15:141]){
 }
 
 
-### B conta
+### MAIT T conta
 
-data_3<-read_excel("./TabelloneOcrelizumab FINALE (conte e %) - 05Agosto24.xlsx",sheet = "MS_B CONTA")
-colnames(data_3) <- gsub(" ", "", colnames(data_3))
-names(data_3)
+data_5<-read_excel("./TabelloneOcrelizumab FINALE (conte e %) - 05Agosto24.xlsx",sheet = "MS_T & MAIT CONTA")
+colnames(data_5) <- gsub(" ", "", colnames(data_5))
+names(data_5)
 
-data_3<-as.data.frame(data_3)
-names(data_3)
-for(col in names(data_3[!is.na(data_3$TP),])[5:17]){
+data_5<-as.data.frame(data_5)
+names(data_5)
+for(col in names(data_5[!is.na(data_5$Timepoint),])[5:146]){
   print(col)
-  p<-ggplot(data_3[!is.na(data_3$TP),],aes(factor(TP),
-                                           data_3[!is.na(data_3$TP),col]))+
+  p<-ggplot(data_5[!is.na(data_5$Timepoint),],aes(factor(Timepoint),
+                                           data_5[!is.na(data_5$Timepoint),col]))+
     geom_boxplot(outliers = F)+
-    ggbeeswarm::geom_quasirandom(shape=21,size=3,aes(fill=factor(TP)))+
+    ggbeeswarm::geom_quasirandom(shape=21,size=3,aes(fill=factor(Timepoint)))+
     ggprism::theme_prism()+
-    stat_compare_means(comparisons = list(c("0","1"),
-                                          c("0","2"),
-                                          c("0","3"),
-                                          c("0","4"),
-                                          c("0","5"),
-                                          c("0","6")))+
+    stat_compare_means(comparisons = list(c("T0","T1"),
+                                          c("T0","T2"),
+                                          c("T0","T3"),
+                                          c("T0","T4"),
+                                          c("T0","T5"),
+                                          c("T0","T6")))+
     ylab(col)+xlab("")
   print(p)
 }
 
 
 ## Alluvial
-cols_to_pivot <- names(data_3)[5:17]
-
+cols_to_pivot <- names(data_5)[5:17]
 df_long <- data_3  %>%
   pivot_longer(cols = all_of(cols_to_pivot),
                names_to = "Population",
@@ -627,27 +622,24 @@ ggplot(df_medians[df_medians$TP!=0&!is.na(df_medians$TP),],
 #####################################################
 
 #####
-dim(info_cl)
 
-names(info_cl)
-head(info_cl)
-head(data_2)
-data_2$TP<-paste0("T",data_2$TP)
-data_2_cl<-merge(info_cl,data_2,
+data_4$Timepoint
+library(lubridate)
+
+info_cl$Eta <- floor(interval(info_cl$`Date of Birth`, now()) / years(1))
+info_cl$Groupeta<-ifelse(info_cl$Eta<=48,"Young","Old")
+table(data_4$Timepoint)
+table(info_cl$Timepoint)
+data_4_cl<-merge(info_cl,data_4,
                  by.x=c("Codice pz",
-                        "Timepoint"), by.y=c("Codice_pz","TP"))
+                        "Timepoint"), by.y=c("Codicepz","Timepoint"))
 
 
-
-names(data_2_cl)
-
-
-
-for( col in names(data_2_cl)[18:144]){
+for( col in names(data_4_cl)[20:199]){
   
   print(col)
-  temp<-data_2_cl[!is.na(data_2_cl[,col])&
-                    !is.na(data_2_cl[,"Fenotipo clinico"]),]
+  temp<-data_4_cl[!is.na(data_4_cl[,col])&
+                    !is.na(data_4_cl[,"Fenotipo clinico"]),]
   res<-vector()
   for (time in unique(temp$Timepoint)){
     
@@ -664,8 +656,8 @@ for( col in names(data_2_cl)[18:144]){
   }
   
   if (any(res)){
-    pl1<-ggplot(data_2_cl[!is.na(data_2_cl$`Fenotipo clinico`),],
-                aes(`Fenotipo clinico`,data_2_cl[!is.na(data_2_cl$`Fenotipo clinico`),col]))+
+    pl1<-ggplot(data_4_cl[!is.na(data_4_cl$`Fenotipo clinico`),],
+                aes(`Fenotipo clinico`,data_4_cl[!is.na(data_4_cl$`Fenotipo clinico`),col]))+
       geom_boxplot(outliers = F)+
       ggbeeswarm::geom_quasirandom(shape=21,size=3,
                                    aes(fill=`Fenotipo clinico`))+
@@ -678,8 +670,8 @@ for( col in names(data_2_cl)[18:144]){
   
   
   
-  temp<-data_2_cl[!is.na(data_2_cl[,col])&
-                    !is.na(data_2_cl[,"Groupeta"]),]
+  temp<-data_4_cl[!is.na(data_4_cl[,col])&
+                    !is.na(data_4_cl[,"Groupeta"]),]
   res<-vector()
   for (time in unique(temp$Timepoint)){
     
@@ -697,8 +689,8 @@ for( col in names(data_2_cl)[18:144]){
   
   if (any(res)){
     
-    pl2<-ggplot(data_2_cl[!is.na(data_2_cl$`Groupeta`),],
-                aes(Groupeta,data_2_cl[!is.na(data_2_cl$Groupeta),col]))+
+    pl2<-ggplot(data_4_cl[!is.na(data_4_cl$`Groupeta`),],
+                aes(Groupeta,data_4_cl[!is.na(data_4_cl$Groupeta),col]))+
       geom_boxplot(outliers = F)+
       ggbeeswarm::geom_quasirandom(shape=21,size=3,
                                    aes(fill=Groupeta))+
@@ -717,18 +709,34 @@ for( col in names(data_2_cl)[18:144]){
 
 ######
 
-data_2_cl$Status<-0
+both<-info_cl[info_cl$Ratio_NFL<1&
+                info_cl$Ratio_EDSS<1&
+                info_cl$Timepoint=="T6",]$`Codice pz`
 
-data_2_cl[data_2_cl$`Codice pz`%in%both,]$Status<-"dNFL dEDSS"
-data_2_cl[data_2_cl$`Codice pz`%in%nflnoedss,]$Status<-"dNFL sEDSS"
-data_2_cl[data_2_cl$`Codice pz`%in%nfledsspeggio,]$Status<-"dNFL iEDSS"
-data_2_cl[data_2_cl$`Codice pz`%in%tuttopeggio,]$Status<-"iNFL iEDSS"
+nflnoedss<-info_cl[info_cl$Ratio_NFL<1&
+                     info_cl$Ratio_EDSS==1&
+                     info_cl$Timepoint=="T6",]$`Codice pz`
+nfledsspeggio<-info_cl[info_cl$Ratio_NFL<1&
+                         info_cl$Ratio_EDSS>1&
+                         info_cl$Timepoint=="T6",]$`Codice pz`
+tuttopeggio<-info_cl[info_cl$Ratio_NFL>1&
+                       info_cl$Ratio_EDSS>1&
+                       info_cl$Timepoint=="T6",]$`Codice pz`
 
-for( col in names(data_2_cl)[18:144]){
+
+data_4_cl$Status<-0
+
+data_4_cl[data_4_cl$`Codice pz`%in%both,]$Status<-"dNFL dEDSS"
+data_4_cl[data_4_cl$`Codice pz`%in%nflnoedss,]$Status<-"dNFL sEDSS"
+data_4_cl[data_4_cl$`Codice pz`%in%nfledsspeggio,]$Status<-"dNFL iEDSS"
+data_4_cl[data_4_cl$`Codice pz`%in%tuttopeggio,]$Status<-"iNFL iEDSS"
+
+data_4_cl[data_4_cl$Timepoint.y=="T0",]$Status
+for( col in names(data_4_cl)[20:65]){
   
   print(col)
-  temp<-data_2_cl[!is.na(data_2_cl[,col])&
-                    !data_2_cl[,"Status"]==0,]
+  temp<-data_4_cl[!is.na(data_4_cl[,col])&
+                    !data_4_cl[,"Status"]==0,]
   res<-vector()
   for (time in unique(temp$Timepoint)){
     
@@ -745,8 +753,8 @@ for( col in names(data_2_cl)[18:144]){
   }
   
   
-  pl1<-ggplot(data_2_cl[!data_2_cl$Status==0,],
-              aes(Status,data_2_cl[!data_2_cl$Status==0,col]))+
+  pl1<-ggplot(data_4_cl[!data_4_cl$Status==0,],
+              aes(Status,data_4_cl[!data_4_cl$Status==0,col]))+
     geom_boxplot(outliers = F)+
     ggbeeswarm::geom_quasirandom(shape=21,size=3,
                                  aes(fill=Status))+
@@ -763,22 +771,22 @@ for( col in names(data_2_cl)[18:144]){
 }
 
 
-}
 
 
 
-data_2_cl$Status2<-0
 
-data_2_cl[data_2_cl$`Codice pz`%in%c(both,
+
+data_4_cl$Status2<-0
+
+data_4_cl[data_4_cl$`Codice pz`%in%c(both,
                                      nflnoedss),]$Status2<-"Stable"
+data_4_cl[data_4_cl$`Codice pz`%in%c(nfledsspeggio,tuttopeggio),]$Status2<-"Worsening"
 
-data_2_cl[data_2_cl$`Codice pz`%in%c(nfledsspeggio,tuttopeggio),]$Status2<-"Worsening"
-
-for( col in names(data_2_cl)[18:144]){
+for( col in names(data_4_cl)[20:160]){
   
   print(col)
-  temp<-data_2_cl[!is.na(data_2_cl[,col])&
-                    !data_2_cl[,"Status2"]==0,]
+  temp<-data_4_cl[!is.na(data_4_cl[,col])&
+                    !data_4_cl[,"Status2"]==0,]
   res<-vector()
   for (time in unique(temp$Timepoint)){
     
@@ -795,8 +803,8 @@ for( col in names(data_2_cl)[18:144]){
   }
   
   if (any(res)){
-    pl1<-ggplot(data_2_cl[!data_2_cl$Status2==0,],
-                aes(Status2,data_2_cl[!data_2_cl$Status2==0,col]))+
+    pl1<-ggplot(data_4_cl[!data_4_cl$Status2==0,],
+                aes(Status2,data_4_cl[!data_4_cl$Status2==0,col]))+
       geom_boxplot(outliers = F)+
       ggbeeswarm::geom_quasirandom(shape=21,size=3,
                                    aes(fill=Status2))+
@@ -811,9 +819,51 @@ for( col in names(data_2_cl)[18:144]){
 
 
 
+###############################
+# NFL
+info_cl$Ratio_NFL
+data_4_cl$Status3<-0
+data_4_cl$Status3<-ifelse(data_4_cl$Ratio_NFL<=1,
+                          "Stable","Worsening")
+
+View(data_4_cl)
 
 
-
+for( col in names(data_4_cl)[20:160]){
+  
+  print(col)
+  temp<-data_4_cl[!is.na(data_4_cl[,col])&
+                    !data_4_cl[,"Status3"]==0&
+                    !is.na(data_4_cl$Status3),]
+  res<-vector()
+  for (time in unique(temp$Timepoint)){
+    
+    if (!all(temp[temp$Timepoint==time,col]==0) &
+        !all(temp[temp$Timepoint==time,"Status3"]==
+             temp[temp$Timepoint==time,"Status3"][1])){
+      test<-wilcox.test(temp[temp$Timepoint==time,col]~
+                          temp[temp$Timepoint==time,"Status3"])
+      
+      if (test$p.value<0.05){
+        res<-c(res,T)
+      }
+    }
+  }
+  
+  if (any(res)){
+    pl1<-ggplot(data_4_cl[!data_4_cl$Status3==0,],
+                aes(Status3,data_4_cl[!data_4_cl$Status3==0,col]))+
+      geom_boxplot(outliers = F)+
+      ggbeeswarm::geom_quasirandom(shape=21,size=3,
+                                   aes(fill=Status3))+
+      ggprism::theme_prism(base_size = 10,axis_text_angle = 45)+
+      ggsci::scale_fill_aaas()+
+      facet_wrap(~Timepoint,nrow=1)+
+      stat_compare_means(comparisons = list(c("Stable","Worsening")))+
+      ylab(col)
+    print(pl1)
+  }
+}
 
 
 
